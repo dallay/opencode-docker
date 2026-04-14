@@ -34,22 +34,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v4
-        with:
-          node-version: "22"
-
-      - name: Install semantic-release
-        run: |
-          npm install --no-save \
-            semantic-release \
-            @semantic-release/commit-analyzer \
-            @semantic-release/release-notes-generator \
-            @semantic-release/github
-
       - name: Run semantic-release
         id: release
-        run: npx semantic-release
+        uses: cycjimmy/semantic-release-action@b1b432f13acb7768e0c8efdec416d363a57546f2 # v4
+        with:
+          extra_plugins: |
+            @semantic-release/commit-analyzer
+            @semantic-release/release-notes-generator
+            @semantic-release/github
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
