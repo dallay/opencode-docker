@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  packages: write
+  security-events: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ==========================================================================
+  # Semantic Release - Determine version
+  # ==========================================================================
+  semantic-release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    outputs:
+      new_release_published: ${{ steps.release.outputs.new_release_published }}
+      new_release_version: ${{ steps.release.outputs.new_release_version }}
+      new_release_major_version: ${{ steps.release.outputs.new_release_major_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v4
+        with:
+          node-version: "22"
+
+      - name: Install semantic-release
+        run: |
+          npm install --no-save \
+            semantic-release \
+            @semantic-release/commit-analyzer \
+            @semantic-release/release-notes-generator \
+            @semantic-release/github
+
+      - name: Run semantic-release
+        id: release
+        run: npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ==========================================================================
+  # Build, Scan and Push Docker Image
+  # ==========================================================================
+  publish-docker:
+    name: Publish Docker Image
+    needs: semantic-release
+    if: needs.semantic-release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
+        with:
+          ref: v${{ needs.semantic-release.outputs.new_release_version }}
+
+      - name: Setup Docker Buildx
+        uses: dallay/common-actions/actions/setup-buildx@main
+
+      - name: Build and Push Docker Image
+        id: build
+        uses: dallay/common-actions/actions/docker-build-push@main
+        with:
+          image-name: opencode
+          image-title: "opencode"
+          image-description: "Custom opencode Docker image with personal skills, commands, and agent configuration"
+          dockerfile: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            OPENCODE_VERSION=1.4.3
+          github-owner: ${{ github.repository_owner }}
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+          version: ${{ needs.semantic-release.outputs.new_release_version }}
+          major-version: ${{ needs.semantic-release.outputs.new_release_major_version }}
+
+      - name: Security Scan
+        uses: dallay/common-actions/actions/docker-security-scan@main
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/opencode:${{ needs.semantic-release.outputs.new_release_version }}
+          report-name: opencode-trivy
+          category: opencode-trivy
+          severity: HIGH,CRITICAL
+          fail-on-error: false
