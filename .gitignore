@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+bun.lockb
+
+# Environment files - NEVER commit these
+.env
+.env.*
+!.env.example
+*.local
+
+# Secrets
+secrets/
+credentials.json
+*.pem
+*.key
+*.cert
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Editor artifacts
+.vscode/
+.idea/
+*.swp
+*.swo
